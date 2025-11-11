@@ -1,0 +1,4 @@
+Run this command:
+1)pip install streamlit openai yt-dlp
+2)pip install streamlit openai yt-dlp pytube whisper
+3)streamlit run app.py
