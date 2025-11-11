@@ -38,8 +38,7 @@ Translation	Google Translate API or model-based translation
 File Handling	textwrap, re, os
 ⚙️ Installation
 1️⃣ Clone the repository
-git clone https://github.com/yourusername/AI_youtube-video-summarizer-using-streamlit
-
+git clone https://github.com/ChandanaDC-dc/AI_youtube-video-summarizer-using-streamlit
 cd AI_youtube-video-summarizer-using-streamlit
 2️⃣ Install dependencies
 pip install streamlit youtube-transcript-api google-generativeai openai textwrap
