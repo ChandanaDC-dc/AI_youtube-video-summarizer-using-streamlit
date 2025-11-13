@@ -4,12 +4,13 @@
 import os
 import re
 import time
-import textwrap
+import json
+import socket
 import requests
 import yt_dlp
 import whisper
-import socket
 from pytube import YouTube
+from datetime import datetime
 import streamlit as st
 from openai import OpenAI
 
@@ -17,9 +18,26 @@ from openai import OpenAI
 # CONFIGURATION
 # =============================
 
-# Replace with your valid OpenAI API key
-OPENAI_API_KEY = "your api key"
+OPENAI_API_KEY = " "  # Replace with your valid OpenAI API key
 client = OpenAI(api_key=OPENAI_API_KEY)
+HISTORY_FILE = "history.json"
+
+# =============================
+# HISTORY HANDLING
+# =============================
+
+def load_history():
+    if os.path.exists(HISTORY_FILE):
+        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return []
+
+def save_history(entry):
+    history = load_history()
+    history.insert(0, entry)  # newest first
+    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+        json.dump(history, f, ensure_ascii=False, indent=4)
+    return history
 
 # =============================
 # AUDIO DOWNLOAD (Robust)
@@ -78,7 +96,6 @@ def download_audio(video_url, filename="audio.wav"):
         st.error("❌ Audio file not found after download.")
         return None
 
-
 # =============================
 # TRANSCRIBE AUDIO (Whisper)
 # =============================
@@ -97,7 +114,6 @@ def transcribe_audio(audio_file="audio.wav"):
         f.write(text)
     return text
 
-
 # =============================
 # OPENAI SUMMARIZATION + TRANSLATION
 # =============================
@@ -106,7 +122,6 @@ def summarize_text_openai(text, summary_type="Paragraph", language="English"):
     if not text.strip():
         return "No transcript found."
 
-    # Summary prompt depending on style
     if summary_type == "Paragraph":
         prompt = f"Summarize this transcript into one short, clear paragraph in {language}:\n\n{text}"
 
@@ -137,14 +152,12 @@ Transcript:
     else:
         prompt = text
 
-    # ✅ Call OpenAI API
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.7
     )
     return response.choices[0].message.content.strip()
-
 
 # =============================
 # FORMATTING HELPERS
@@ -159,7 +172,6 @@ def format_bullet_points(summary):
         else:
             formatted.append(line)
     return "\n".join(formatted)
-
 
 def format_conversation(summary_text):
     lines = re.split(r'(?<=\.)\s+', summary_text.strip())
@@ -179,18 +191,46 @@ def format_conversation(summary_text):
         formatted.append(line)
     return "\n".join(formatted)
 
-
 # =============================
 # STREAMLIT UI
 # =============================
 
-st.set_page_config(page_title="🎧 YouTube AI Summarizer + Translator", page_icon="🎙️", layout="wide")
+st.set_page_config(page_title="🎧 YouTube AI Summarizer + Translation", page_icon="🎙️", layout="wide")
 st.title("🎧 YouTube → Audio → Text → AI Summary + Translation 🌐")
-st.markdown("Extract, Transcribe, Summarize, and Translate YouTube audio with OpenAI.")
+st.markdown("Extract, Transcribe, Summarize, Translate and Store History with OpenAI.")
 
 video_url = st.text_input("🔗 Enter YouTube video URL:")
 summary_type = st.selectbox("🧾 Choose Summary Format:", ["Paragraph", "Bullet Points", "Conversational"])
 language = st.selectbox("🌍 Choose Output Language:", ["English", "Kannada", "Hindi"])
+
+# =============================
+# SIDEBAR HISTORY
+# =============================
+
+with st.sidebar:
+    st.header("🕘 Summary History")
+    history = load_history()
+    if st.button("🧹 Clear History"):
+        open(HISTORY_FILE, "w").write("[]")
+        st.success("History cleared!")
+    if history:
+        for item in history[:5]:  # show latest 5
+            st.markdown(f"""
+            **🕓 {item['timestamp']}**
+            - 🔗 [Video]({item['video_url']})
+            - 🌍 {item['language']} | 🧾 {item['summary_type']}
+            <details>
+            <summary>📜 View Summary</summary>
+            <p>{item['summary']}</p>
+            </details>
+            <hr>
+            """, unsafe_allow_html=True)
+    else:
+        st.info("No summaries yet. Generate one to see history here.")
+
+# =============================
+# MAIN APP LOGIC
+# =============================
 
 if st.button("1️⃣ Download Audio"):
     with st.spinner("Downloading audio..."):
@@ -226,5 +266,15 @@ if st.button("3️⃣ Generate Summary (Translated)"):
 
             else:
                 st.text_area(f"🧾 {language} Summary:", summary, height=250)
+
+            # ✅ Save to local history
+            entry = {
+                "video_url": video_url,
+                "summary_type": summary_type,
+                "language": language,
+                "summary": summary,
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            save_history(entry)
     else:
         st.error("⚠️ Transcript not found. Please transcribe first.")
